@@ -1,0 +1,141 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+function myform_menu() {
+  $items = array();
+
+  $items['myform'] = array(
+    'title' => 'My AJAX Form',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('my_ajax_form'),
+    'access arguments' => array('access content'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['myform/list'] = array(
+    'title' => 'View users',
+    'page callback' => 'view_user_list',
+    'access arguments' => array('access content'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+  
+  /**
+   * Page callback for /hello.
+   */
+  function myform_page() {
+    // Create the form
+    $form = drupal_get_form('my_ajax_form');
+    return $form;
+  }
+
+  /**
+ * Form definition for the custom AJAX form.
+ */
+function my_ajax_form($form, &$form_state) {
+  // Add  textfields
+  $form['name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Name'),
+    '#required' => TRUE,
+  );
+
+  $form['email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Email'),
+    '#required' => TRUE,
+  );
+
+  //Add a submit button with AJAX properties
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+    '#validate' =>  array('my_form_validate'),
+    '#ajax' => array(
+      'callback' => 'my_ajax_form_submit_callback',
+      'wrapper' => 'ajax-form-message', // ID of the HTML element to replace
+    ),
+  );
+
+  //Add a placeholder for AJAX response
+  $form['message'] = array(
+    '#type' => 'markup',
+    '#markup' => '<div id="ajax-form-message"></div>',
+  );
+
+  return $form;
+}
+
+/**
+ * Form validation handler.
+ */
+function my_form_validate($form, &$form_state) {
+  // Get the name field value.
+  $name = $form_state['values']['name'];
+  $email = $form_state['values']['email'];
+
+  // Validate: Name should be at least 5 characters.
+  if (strlen($name) < 3) {
+    form_set_error('name', t('The name must be at least 3 characters long.'));
+  }
+  if ((filter_var($email, FILTER_VALIDATE_EMAIL)) == FALSE) {
+    form_set_error('email', 'Please enter a valid email address!!');
+  }
+}
+
+/**
+ * AJAX callback function for the form.
+ */
+function my_ajax_form_submit_callback($form, &$form_state) {
+  $response = array();
+  // Get the submitted value
+  $name = $form_state['values']['name'];
+  $email = $form_state['values']['email'];
+
+  // Insert the data into a custom database table 'my_custom_table'.
+  $insert = db_insert('user_info') // Table name without curly braces.
+    ->fields(array(
+      'name' => $name,   // 'name' column in the database.
+      'email' => $email, // 'email' column in the database.
+    ))
+    ->execute();
+
+  // Check if insert was successful.
+  if ($insert) {
+    $response['#markup'] = '<p>' . t('Hello, @name!', array('@name' => $name)) . '</p>';
+  } else {
+    $response['#markup'] = '<p> Something went wrong!</p>';
+  }
+  // Set a message to return
+
+  return $response;
+}
+
+/**
+ * Create a view to see the users subimitted by the AJAX form
+ */
+
+ function view_user_list(){
+  $rows = array();
+  $query = db_select('user_info', 't')
+    ->fields('t', array('name', 'email')) // Adjust fields as needed.
+    ->execute();
+ 
+  foreach ($query as $record) {
+    // Create a row for each record.
+    $rows[] = array(
+      'data' => array(
+        $record->name,
+        $record->email,
+      ),
+    );
+  }
+  // Define the table header.
+  $header = array('Name', 'Email');
+  $output = theme('table', array('header' => $header, 'rows' => $rows));
+  return $output;  
+ }
